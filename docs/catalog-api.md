@@ -3,6 +3,8 @@
 `POST {SUPABASE_URL}/rest/v1/rpc/customer_catalog` with an empty JSON body,
 `apikey: {PUBLIC_ANON_KEY}` and `Authorization: Bearer {PUBLIC_ANON_KEY}`.
 No customer sign-in is required. Returns `{ products: Product[], categories: Category[] }`.
+With a new `sb_publishable_*` key send only the `apikey` header: that key is not
+a JWT and must not be used as a Bearer token. Both public key formats are supported.
 
 Product allowlist: `id`, `name`, `sell_price` (BDT), `colors`, `available`,
 `photos` (id, phash and storage paths), `category`, `subcategory`, `description`,

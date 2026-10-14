@@ -40,6 +40,11 @@ plan eligibility and quotas in your account; this repository creates no paid pla
 - Customers tap hearts to save products on their own browser. **Copy my list**
   prepares current prices and product links to paste in a Facebook chat. The
   customer still confirms stock, delivery fees, and the final total with you.
+- The first product photo is its cover. Manager can move another image to the
+  front, classify photos as catalog/color-design/real, and label each image.
+  Product details include a gallery with thumbnails and photo-type tabs.
+- Search includes photo labels; filters cover category, subcategory, color,
+  maximum budget, and availability. Sort by price or newest first.
 
 ## Supabase availability
 
