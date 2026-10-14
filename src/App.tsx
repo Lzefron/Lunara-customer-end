@@ -17,6 +17,12 @@ const DEFAULT_CATEGORIES: Category[] = [
 function readSaved(): string[] {
   try { const value = JSON.parse(localStorage.getItem('lunara-plan') ?? '[]'); return Array.isArray(value) ? value.filter(id => typeof id === 'string') : [] } catch { return [] }
 }
+function readCachedCatalog(): Catalog | null {
+  try {
+    const value = JSON.parse(localStorage.getItem('lunara-public-catalog-v1') ?? 'null')
+    return value && Array.isArray(value.products) && Array.isArray(value.categories) ? value : null
+  } catch { return null }
+}
 
 function Modal({ children, title, onClose }: { children: React.ReactNode; title: string; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -53,10 +59,11 @@ function ProductDetail({ product, saved, onSave, onClose }: { product: Product; 
 }
 
 export default function App() {
-  const [catalog, setCatalog] = useState<Catalog>({ products: [], categories: DEFAULT_CATEGORIES })
-  const [loading, setLoading] = useState(configured)
-  const [error, setError] = useState('')
-  const [loaded, setLoaded] = useState(false)
+  const cached = useMemo(readCachedCatalog, [])
+  const [catalog, setCatalog] = useState<Catalog>(cached ?? { products: [], categories: DEFAULT_CATEGORIES })
+  const [loading, setLoading] = useState(configured && !cached)
+  const [error, setError] = useState(cached ? 'Showing your saved collection while we check for updates.' : '')
+  const [loaded, setLoaded] = useState(Boolean(cached))
   const [view, setView] = useState<'feed' | 'catalog' | 'plan'>('feed')
   const [category, setCategory] = useState('')
   const [subcategory, setSubcategory] = useState('')
@@ -79,6 +86,7 @@ export default function App() {
       const data = await getCatalog(controller.signal)
       setCatalog({ products: data.products, categories: data.categories.length ? data.categories : DEFAULT_CATEGORIES })
       setError(''); setLoaded(true)
+      try { localStorage.setItem('lunara-public-catalog-v1', JSON.stringify(data)) } catch { /* Optional offline copy; browsing still works. */ }
     } catch {
       setError(navigator.onLine ? 'The catalog is temporarily unavailable. Please try again, or visit us on Facebook.' : 'You’re offline. Reconnect to see the latest products.')
     } finally { clearTimeout(timeout); activeRequest.current = null; setLoading(false) }

@@ -23,8 +23,9 @@ Product links use `/?product={id}`. Saved plans contain IDs only in browser
 localStorage. Products that are no longer published cannot be ordered or shared
 from the plan. There is no customer mutation endpoint, cart, checkout, or account.
 
-Vercel calls `GET /api/keep-alive` daily. This performs three read-only catalog
-queries and returns only `{ ok: true }` or a 503 health response. This is best
+GitHub Actions runs `scripts/check-database.mjs` daily, performing three read-only
+catalog queries. The optional Vercel/Worker endpoint `GET /api/keep-alive` performs
+the same check and returns only `{ ok: true }` or a 503 health response. This is best
 effort activity, not an uptime or no-pause guarantee. An already paused project
 must be resumed in Supabase's dashboard. Configure the two VITE_* environment
 variables for both Vercel builds and functions; never use a service-role key.

@@ -1,0 +1,36 @@
+name: Keep Supabase active
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: supabase-activity
+  cancel-in-progress: false
+jobs:
+  database-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check the database
+        run: node scripts/check-database.mjs
+      # Public scheduled workflows can be disabled after 60 days without repo
+      # activity. Record a successful check weekly so this repo stays active.
+      # GITHUB_TOKEN commits do not recursively trigger other workflows.
+      - name: Record weekly health check
+        shell: bash
+        run: |
+          if [ "$(date -u +%u)" != "1" ] && [ -f health/last-check.txt ]; then exit 0; fi
+          mkdir -p health
+          date -u '+Database check passed at %Y-%m-%d %H:%M UTC' > health/last-check.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add health/last-check.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record weekly database health check [skip ci]'
+          git push
