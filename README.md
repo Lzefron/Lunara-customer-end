@@ -1,5 +1,8 @@
 # Lunara customer catalog
 
+Live storefront: https://lunara-customer-end.pages.dev
+Manager: https://lunara-manager.vercel.app
+
 React + TypeScript + Vite storefront for Lunara Bangladesh. Browse only, with a
 daily feed, categories and subcategories, search/sort/availability filters,
 product photo galleries, shareable product links, and a local “plan to order”.
