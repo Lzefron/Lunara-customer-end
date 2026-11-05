@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { configured, getCatalog } from './api'
-import { BrandArt, categoryIcon, Icon, money, ProductCard, ProductImage } from './components'
-import { dailyFeed, dhakaDay, filterProducts, planText } from './catalogLogic.mjs'
-import type { Catalog, Category, Product } from './types'
+import { categoryIcon, Icon, money, ProductCard, ProductImage } from './components'
+import { visitFeed, dhakaDay, filterProducts, planText, productColors, productSizes } from './catalogLogic.mjs'
+import defaults from './catalogCategories.json'
+import { mergeCategories, normalizeCategory } from './categories.mjs'
+import type { Catalog, Product } from './types'
 
 const FACEBOOK = 'https://www.facebook.com/profile.php?id=61562364925221'
 const INSTAGRAM = 'https://www.instagram.com/lunara_bd/'
-const DEFAULT_CATEGORIES: Category[] = [
-  { name: 'Bags', subcategories: ['Shoulder bags', 'Crossbody bags', 'Handbags', 'Backpacks'] },
-  { name: 'Clothes', subcategories: ['Tops', 'Dresses', 'Co-ords'] },
-  { name: 'Cosmetics', subcategories: ['Makeup', 'Skincare', 'Beauty tools'] },
-  { name: 'Shoes', subcategories: ['Flats', 'Heels', 'Sneakers'] },
-  { name: 'Tote bags', subcategories: ['Canvas totes', 'Everyday totes'] },
-]
 
 function readSaved(): string[] {
   try { const value = JSON.parse(localStorage.getItem('lunara-plan') ?? '[]'); return Array.isArray(value) ? value.filter(id => typeof id === 'string') : [] } catch { return [] }
@@ -20,7 +15,7 @@ function readSaved(): string[] {
 function readCachedCatalog(): Catalog | null {
   try {
     const value = JSON.parse(localStorage.getItem('lunara-public-catalog-v1') ?? 'null')
-    return value && Array.isArray(value.products) && Array.isArray(value.categories) ? value : null
+    return value && Array.isArray(value.products) && Array.isArray(value.categories) ? { ...value, products: value.products.map((p: Product) => ({ ...p, category: normalizeCategory(p.category), subcategory: p.category === 'Tote bags' ? p.subcategory || 'Tote bags' : p.subcategory })) } : null
   } catch { return null }
 }
 
@@ -47,11 +42,12 @@ function ProductDetail({ product, saved, onSave, onClose }: { product: Product; 
     try { await navigator.clipboard.writeText(url); setNotice('Product link copied') } catch { setNotice(url) }
   }
   return <Modal title={product.name} onClose={onClose}><div className="detail-layout"><div><ProductImage product={product} full index={photo}/>
-    {product.photos[photo]?.label && <p className="photo-caption">{product.photos[photo].label}</p>}
+    <p className="photo-caption">{[product.photos[photo]?.label, product.photos[photo]?.color, product.photos[photo]?.size, product.photos[photo]?.design].filter(Boolean).join(' · ')}</p>
     {product.photos.length > 1 && <><div className="gallery-tabs" aria-label="Photo types">{[['all','All photos'],['variant','Colors & designs'],['real','Real photos']].filter(([kind]) => kind === 'all' || product.photos.some(p => p.kind === kind)).map(([kind, label]) => <button key={kind} className={photoKind === kind ? 'active' : ''} onClick={() => { setPhotoKind(kind); setPhoto(kind === 'all' ? 0 : product.photos.findIndex(p => p.kind === kind)) }}>{label}</button>)}</div><div className="gallery-options">{gallery.map(p => <button key={p.id} aria-label={p.label || `Photo ${p.index + 1}`} aria-pressed={photo === p.index} onClick={() => setPhoto(p.index)} className={photo === p.index ? 'active' : ''}><ProductImage product={product} index={p.index} thumbnail/><span>{p.label || `Photo ${p.index + 1}`}</span></button>)}</div></>}
     </div><div className="detail-info"><span className="eyebrow">{product.category}{product.subcategory ? ` / ${product.subcategory}` : ''}</span><h2>{product.name}</h2><p className="detail-price">{money(product.sell_price)}</p><p className="availability">{product.available ? 'Available to enquire' : 'Currently sold out'}</p>
     {product.description && <p className="description">{product.description}</p>}
-    {product.colors.length > 0 && <div className="detail-colors"><span className="eyebrow">COLORS</span><div>{product.colors.map(color => <span key={color}>{color}</span>)}</div></div>}
+    {productColors(product).length > 0 && <div className="detail-colors"><span className="eyebrow">COLORS</span><div>{productColors(product).map(color => <span key={color}>{color}</span>)}</div></div>}
+    {productSizes(product).length > 0 && <div className="detail-colors"><span className="eyebrow">SIZES</span><div>{productSizes(product).map(size => <span key={size}>{size}</span>)}</div></div>}
     <button className={`primary-button ${saved ? 'is-saved' : ''}`} onClick={onSave}><Icon name={saved ? 'check' : 'heart'} size={18}/>{saved ? 'Saved to my plan' : 'Save to my plan'}</button>
     <button className="secondary-button" onClick={share}>Copy product link <Icon name="arrow" size={18}/></button>
     <p className="small-note">Love it? Save it, then chat with us to confirm availability and delivery.</p><div className="social-links"><a href={FACEBOOK} target="_blank" rel="noreferrer">Facebook ↗</a><a href={INSTAGRAM} target="_blank" rel="noreferrer">Instagram ↗</a></div><p role="status">{notice}</p>
@@ -60,7 +56,7 @@ function ProductDetail({ product, saved, onSave, onClose }: { product: Product; 
 
 export default function App() {
   const cached = useMemo(readCachedCatalog, [])
-  const [catalog, setCatalog] = useState<Catalog>(cached ?? { products: [], categories: DEFAULT_CATEGORIES })
+  const [catalog, setCatalog] = useState<Catalog>(cached ?? { products: [], categories: defaults })
   const [loading, setLoading] = useState(configured && !cached)
   const [error, setError] = useState(cached ? 'Showing your saved collection while we check for updates.' : '')
   const [loaded, setLoaded] = useState(Boolean(cached))
@@ -74,6 +70,9 @@ export default function App() {
   const [budget, setBudget] = useState('')
   const [savedIds, setSavedIds] = useState<string[]>(readSaved)
   const [selectedId, setSelectedId] = useState(new URLSearchParams(location.search).get('product'))
+  const [visitSeed, setVisitSeed] = useState(() => `${Date.now()}-${Math.random()}`)
+  const [size, setSize] = useState('')
+  const [visibleCount, setVisibleCount] = useState(24)
   const [day, setDay] = useState(dhakaDay())
   const [notice, setNotice] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
@@ -84,7 +83,7 @@ export default function App() {
     const timeout = setTimeout(() => controller.abort(), 20000)
     try {
       const data = await getCatalog(controller.signal)
-      setCatalog({ products: data.products, categories: data.categories.length ? data.categories : DEFAULT_CATEGORIES })
+      setCatalog({ products: data.products, categories: data.categories.length ? data.categories : defaults })
       setError(''); setLoaded(true)
       try { localStorage.setItem('lunara-public-catalog-v1', JSON.stringify(data)) } catch { /* Optional offline copy; browsing still works. */ }
     } catch {
@@ -109,7 +108,7 @@ export default function App() {
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(''), 4500); return () => clearTimeout(t) }, [notice])
 
   const categories = useMemo(() => {
-    const result = catalog.categories.map(c => ({ ...c, subcategories: [...c.subcategories] }))
+    const result = mergeCategories(defaults, catalog.categories, catalog.products) as Catalog['categories']
     for (const p of catalog.products) {
       if (!p.category) continue
       let c = result.find(c => c.name === p.category)
@@ -119,18 +118,28 @@ export default function App() {
     return result
   }, [catalog])
   const savedProducts = catalog.products.filter(p => savedIds.includes(p.id))
+  const homeCollections = useMemo(() => {
+    const shuffled = visitFeed(catalog.products, visitSeed + day) as Product[]
+    const latest = [...catalog.products].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).slice(0, 12)
+    const groups = [
+      { title: 'New arrivals', description: 'Recently added to Lunara', category: '', items: visitFeed(latest, visitSeed) as Product[] },
+      ...categories.map(c => ({ title: c.name === 'Bags' ? 'Bags to love' : c.name === 'Shoes' ? 'Shoes for every day' : c.name, description: 'A few favourites to explore', category: c.name, items: shuffled.filter(p => p.category === c.name) })),
+    ]
+    return groups.filter(g => g.items.length).slice(0, 5)
+  }, [catalog.products, categories, visitSeed, day])
   const unavailableCount = savedIds.filter(id => !catalog.products.some(p => p.id === id)).length
   const selected = catalog.products.find(p => p.id === selectedId)
   const products = useMemo(() => {
-    const source = view === 'plan' ? savedProducts : view === 'feed' ? dailyFeed(catalog.products, day) : catalog.products
-    const result = filterProducts(source, { category: view === 'plan' ? '' : category, subcategory: view === 'plan' ? '' : subcategory, query, available, color, budget }) as Product[]
+    const source = view === 'plan' ? savedProducts : view === 'feed' ? visitFeed(catalog.products, visitSeed + day) : catalog.products
+    const result = filterProducts(source, { category: view === 'plan' ? '' : category, subcategory: view === 'plan' ? '' : subcategory, query, available, color, budget, size }) as Product[]
     if (sort === 'low') result.sort((a, b) => a.sell_price - b.sell_price)
     if (sort === 'high') result.sort((a, b) => b.sell_price - a.sell_price)
     if (sort === 'new') result.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     return result
-  }, [view, savedProducts, catalog.products, day, category, subcategory, query, available, sort, color, budget])
+  }, [view, savedProducts, catalog.products, day, category, subcategory, query, available, sort, color, budget, size, visitSeed])
+  useEffect(() => { setVisibleCount(24) }, [view, category, subcategory, query, available, sort, color, budget, size, visitSeed])
   function navigate(next: typeof view, cat = '') {
-    setView(next); setCategory(cat); setSubcategory(''); setQuery(''); setSort('recommended'); setAvailable(false); setColor(''); setBudget('')
+    setView(next); setCategory(cat); setSubcategory(''); setQuery(''); setSort('recommended'); setAvailable(false); setColor(''); setBudget(''); setSize('')
     window.scrollTo({ top: 0, behavior: 'auto' })
   }
   function toggleSave(id: string) {
@@ -149,27 +158,29 @@ export default function App() {
   return <>
     <div className="announcement"><span>A little lovely, every day.</span><span>CURATED IN BANGLADESH <span aria-hidden="true">✧</span></span></div>
     <header className="header"><div className="header-inner"><button className="wordmark" onClick={() => navigate('feed')} aria-label="Lunara home">lunara<span>✧</span></button>
-      <nav className="main-nav" aria-label="Main navigation"><button className={view === 'feed' ? 'active' : ''} onClick={() => navigate('feed')}>The daily edit</button><button className={view === 'catalog' ? 'active' : ''} onClick={() => navigate('catalog')}>Explore collection</button><a href={INSTAGRAM} target="_blank" rel="noreferrer">Our Instagram ↗</a></nav>
+      <nav className="main-nav" aria-label="Main navigation"><button className={view === 'feed' ? 'active' : ''} onClick={() => navigate('feed')}>Discover</button><button className={view === 'catalog' ? 'active' : ''} onClick={() => navigate('catalog')}>Explore collection</button><a href={INSTAGRAM} target="_blank" rel="noreferrer">Our Instagram ↗</a></nav>
       <button className={`plan-button ${view === 'plan' ? 'active' : ''}`} onClick={() => navigate('plan')}><Icon name="heart" size={19}/><span>My plan</span><b>{savedIds.length}</b></button></div></header>
     <main>
-      {view === 'feed' && !query && <section className="hero"><div className="hero-copy"><span className="eyebrow"><i/> THE LUNARA EDIT</span><h1>Little things.<br/><em>Lovely days.</em></h1><p>Your next favourite bag. A touch of beauty.<br/>Everyday pieces, picked with you in mind.</p><button className="primary-button" onClick={() => navigate('catalog')}>Find your favourites <Icon name="arrow" size={19}/></button><div className="hero-footnote"><span>Made for your wish list</span><span aria-hidden="true">✧</span><span>Prices in BDT</span></div></div><div className="hero-art"><BrandArt/><span className="art-caption">the everyday essentials</span><div className="hero-stamp">A LITTLE<br/><em>lovely</em><br/>FOR YOU</div></div></section>}
+      {view === 'feed' && !query && !catalog.products.length && <section className="hero"><div className="hero-copy"><span className="eyebrow"><i/> THE LUNARA EDIT</span><h1>Little things.<br/><em>Lovely days.</em></h1><p>Your next favourite bag. A touch of beauty.<br/>Everyday pieces, picked with you in mind.</p><button className="primary-button" onClick={() => navigate('catalog')}>Find your favourites <Icon name="arrow" size={19}/></button><div className="hero-footnote"><span>Made for your wish list</span><span aria-hidden="true">✧</span><span>Prices in BDT</span></div></div><div className="hero-art">{catalog.products.some(p => p.photos.length) ? <div className="hero-products">{visitFeed(catalog.products.filter(p => p.photos.length), visitSeed).slice(0, 3).map(p => <button key={p.id} onClick={() => openProduct(p.id)} aria-label={`View ${p.name}`}><ProductImage product={p}/><span>{p.name} · {money(p.sell_price)}</span></button>)}</div> : <img className="editorial-banner" src="/images/lunara-editorial.jpg" alt="Fashion inspiration: bags, shoes, scarves and beauty essentials"/>}<span className="art-caption">the everyday essentials</span><div className="hero-stamp">A LITTLE<br/><em>lovely</em><br/>FOR YOU</div></div></section>}
       <div className="content-wrap">
-        {view !== 'plan' && <section className="category-section" aria-label="Browse categories"><div className="section-kicker">A WORLD OF LITTLE FAVOURITES</div><div className="category-row"><button className={!category ? 'category active' : 'category'} onClick={() => { setCategory(''); setSubcategory('') }}><span className="category-icon"><Icon name="grid" size={27}/></span><span>Everything</span></button>{categories.map(c => <button key={c.name} className={category === c.name ? 'category active' : 'category'} onClick={() => { setCategory(c.name); setSubcategory(''); setView('catalog') }}><span className="category-icon"><Icon name={categoryIcon(c.name)} size={29}/></span><span>{c.name}</span></button>)}</div></section>}
-        <section className="collection-section" id="collection"><div className="collection-heading"><div><span className="eyebrow">{view === 'plan' ? 'YOUR LITTLE WISH LIST' : view === 'feed' ? `FRESH PERSPECTIVE · ${new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', timeZone: 'Asia/Dhaka' }).format(new Date())}` : 'FIND SOMETHING YOU LOVE'}</span><h2>{view === 'plan' ? 'Your plan to order' : category || (view === 'feed' ? 'Today’s little favourites' : 'Explore the collection')}<span className="heading-sparkle">✧</span></h2><p>{view === 'plan' ? 'Keep your favourites together. Send us your list whenever you’re ready.' : view === 'feed' ? 'A new mix every day. Come back for a little inspiration.' : 'Thoughtfully picked pieces for every kind of day.'}</p></div>{view === 'feed' && <span className="daily-label"><Icon name="sun" size={16}/> Refreshes daily</span>}</div>
+        {view !== 'plan' && <div className="discovery-top"><div><span className="eyebrow">LUNARA · JUST FOR YOU</span><h1>{view === 'feed' ? 'Find your next favourite.' : 'Explore the collection.'}</h1></div><label className="search"><Icon name="search" size={19}/><input type="search" aria-label="Search all products" placeholder="Search bags, shoes, colors, sizes…" value={query} onChange={e => setQuery(e.target.value)}/></label></div>}
+        {view !== 'plan' && <section className="category-section" aria-label="Browse categories"><div className="section-kicker">SHOP BY DEPARTMENT</div><div className="category-row"><button className={!category ? 'category active' : 'category'} onClick={() => { setCategory(''); setSubcategory('') }}><span className="category-icon"><Icon name="grid" size={27}/></span><span>Everything</span></button>{categories.map(c => <button key={c.name} className={category === c.name ? 'category active' : 'category'} onClick={() => { setCategory(c.name); setSubcategory(''); setView('catalog') }}><span className="category-icon"><Icon name={categoryIcon(c.name)} size={29}/></span><span>{c.name}</span></button>)}</div></section>}
+        {view === 'feed' && !query && !category && !color && !size && !budget && !available && homeCollections.map(group => <section className="home-collection" key={group.title} aria-label={group.title}><div className="collection-heading"><div><span className="eyebrow">{group.description}</span><h2>{group.title}</h2></div><button className="secondary-button" onClick={() => { navigate('catalog', group.category); if (!group.category) setSort('new') }}>View all ↗</button></div><div className="collection-rail">{group.items.slice(0, 6).map(p => <ProductCard key={p.id} product={p} saved={savedIds.includes(p.id)} onSave={() => toggleSave(p.id)} onOpen={() => openProduct(p.id)}/>)}</div></section>)}
+        <section className="collection-section" id="collection"><div className="collection-heading"><div><span className="eyebrow">{view === 'plan' ? 'YOUR LITTLE WISH LIST' : view === 'feed' ? `FRESH PERSPECTIVE · ${new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', timeZone: 'Asia/Dhaka' }).format(new Date())}` : 'FIND SOMETHING YOU LOVE'}</span><h2>{view === 'plan' ? 'Your plan to order' : category || (view === 'feed' ? 'More to fall in love with' : 'Explore the collection')}<span className="heading-sparkle">✧</span></h2><p>{view === 'plan' ? 'Keep your favourites together. Send us your list whenever you’re ready.' : view === 'feed' ? 'A fresh mix each visit. Keep scrolling to find your favourites.' : 'Thoughtfully picked pieces for every kind of day.'}</p></div>{view === 'feed' && <button className="secondary-button" onClick={() => setVisitSeed(`${Date.now()}-${Math.random()}`)}>Shuffle collection ↻</button>}</div>
           {category && view !== 'plan' && <div className="subcategories" aria-label="Subcategories"><button className={!subcategory ? 'active' : ''} onClick={() => setSubcategory('')}>All {category.toLowerCase()}</button>{categories.find(c => c.name === category)?.subcategories.map(s => <button key={s} className={subcategory === s ? 'active' : ''} onClick={() => setSubcategory(s)}>{s}</button>)}</div>}
-          <div className="toolbar"><label className="search"><Icon name="search" size={19}/><input type="search" placeholder="Search for something lovely…" aria-label="Search products" value={query} onChange={e => setQuery(e.target.value)}/></label><div className="filters"><label className="available-filter"><input type="checkbox" checked={available} onChange={e => setAvailable(e.target.checked)}/> Available only</label><label className="sort"><span>Sort:</span><select aria-label="Sort products" value={sort} onChange={e => setSort(e.target.value)}><option value="recommended">{view === 'feed' ? 'Today’s edit' : 'Recommended'}</option><option value="new">Newest first</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option></select></label></div></div>
-          <div className="extra-filters"><label>Color<select aria-label="Filter by color" value={color} onChange={e => setColor(e.target.value)}><option value="">Every color</option>{[...new Set(catalog.products.flatMap(p => p.colors))].sort().map(c => <option key={c} value={c}>{c}</option>)}</select></label><label>Budget<select aria-label="Filter by budget" value={budget} onChange={e => setBudget(e.target.value)}><option value="">Any price</option><option value="500">Up to ৳500</option><option value="1000">Up to ৳1,000</option><option value="2000">Up to ৳2,000</option><option value="5000">Up to ৳5,000</option></select></label>{(color || budget || query || available) && <button onClick={() => { setColor(''); setBudget(''); setQuery(''); setAvailable(false) }}>Clear filters</button>}</div>
+          <div className="toolbar"><label className="search"><Icon name="search" size={19}/><input type="search" placeholder="Search for something lovely…" aria-label="Search products" value={query} onChange={e => setQuery(e.target.value)}/></label><div className="filters"><label className="available-filter"><input type="checkbox" checked={available} onChange={e => setAvailable(e.target.checked)}/> Available only</label><label className="sort"><span>Sort:</span><select aria-label="Sort products" value={sort} onChange={e => setSort(e.target.value)}><option value="recommended">{view === 'feed' ? 'For this visit' : 'Recommended'}</option><option value="new">Newest first</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option></select></label></div></div>
+          <div className="extra-filters"><label>Department<select aria-label="Filter by department" value={category} onChange={e => { setCategory(e.target.value); setSubcategory(''); setView('catalog') }}><option value="">All departments</option>{categories.map(c => <option key={c.name}>{c.name}</option>)}</select></label><label>Color<select aria-label="Filter by color" value={color} onChange={e => setColor(e.target.value)}><option value="">Every color</option>{([...new Set(catalog.products.flatMap(productColors))] as string[]).sort().map(c => <option key={c} value={c}>{c}</option>)}</select></label><label>Size<select aria-label="Filter by size" value={size} onChange={e => setSize(e.target.value)}><option value="">Every size</option>{(Array.from(new Set(catalog.products.flatMap(productSizes))) as string[]).sort().map(s => <option key={s} value={s}>{s}</option>)}</select></label><label>Budget<select aria-label="Filter by budget" value={budget} onChange={e => setBudget(e.target.value)}><option value="">Any price</option><option value="500">Up to ৳500</option><option value="1000">Up to ৳1,000</option><option value="2000">Up to ৳2,000</option><option value="5000">Up to ৳5,000</option></select></label>{(color || budget || query || available || size) && <button onClick={() => { setColor(''); setBudget(''); setSize(''); setQuery(''); setAvailable(false); setSize('') }}>Clear filters</button>}</div>
           {error && <div className="connection-notice" role="status"><span>{error}{loaded ? ' Showing the last loaded collection; prices and availability may have changed.' : ''}</span><button onClick={refresh}>Try again</button></div>}
           {selectedId && loaded && !selected && <div className="connection-notice" role="status">This product is no longer in the catalog.<button onClick={closeProduct}>Dismiss</button></div>}
           {view === 'plan' && unavailableCount > 0 && loaded && <div className="connection-notice">{unavailableCount} saved {unavailableCount === 1 ? 'item is' : 'items are'} no longer published.<button onClick={() => setSavedIds(savedProducts.map(p => p.id))}>Clear unavailable items</button></div>}
-          {loading ? <div className="product-grid" aria-label="Loading products" aria-busy="true">{[1,2,3,4].map(i => <div className="skeleton" key={i}/>)}</div> : products.length ? <><div className="result-count">{products.length} {products.length === 1 ? 'little favourite' : 'little favourites'}</div><div className="product-grid">{products.map(p => <ProductCard key={p.id} product={p} saved={savedIds.includes(p.id)} onSave={() => toggleSave(p.id)} onOpen={() => openProduct(p.id)}/>)}</div></> : <div className="empty-state"><span className="empty-icon"><Icon name={view === 'plan' ? 'heart' : 'bag'} size={36}/></span><h3>{view === 'plan' ? 'A little room for your favourites' : query || category || available ? 'Still looking for your lovely?' : 'Something lovely is on its way'}</h3><p>{view === 'plan' ? 'Tap the heart on any product to keep it here.' : query || category || available ? 'Try another search or explore the whole collection.' : 'We’re preparing our collection. Follow Lunara for the latest finds.'}</p><button className="secondary-button" onClick={() => navigate('catalog')}>{view === 'plan' ? 'Explore the collection' : 'Show all products'}<Icon name="arrow" size={18}/></button></div>}
+          {loading ? <div className="product-grid" aria-label="Loading products" aria-busy="true">{[1,2,3,4].map(i => <div className="skeleton" key={i}/>)}</div> : products.length ? <><div className="result-count">{products.length} {products.length === 1 ? 'little favourite' : 'little favourites'}</div><div className="product-grid">{products.slice(0, visibleCount).map(p => <ProductCard key={p.id} product={p} saved={savedIds.includes(p.id)} onSave={() => toggleSave(p.id)} onOpen={() => openProduct(p.id)}/>)}</div>{visibleCount < products.length && <button className="primary-button load-more" onClick={() => setVisibleCount(n => n + 24)}>Discover more · {products.length - visibleCount} remaining</button>}</> : <div className="empty-state"><span className="empty-icon"><Icon name={view === 'plan' ? 'heart' : 'bag'} size={36}/></span><h3>{view === 'plan' ? 'A little room for your favourites' : query || category || available ? 'Still looking for your lovely?' : 'Something lovely is on its way'}</h3><p>{view === 'plan' ? 'Tap the heart on any product to keep it here.' : query || category || available ? 'Try another search or explore the whole collection.' : 'We’re preparing our collection. Follow Lunara for the latest finds.'}</p><button className="secondary-button" onClick={() => navigate('catalog')}>{view === 'plan' ? 'Explore the collection' : 'Show all products'}<Icon name="arrow" size={18}/></button></div>}
           {view === 'plan' && savedProducts.length > 0 && <div className="plan-summary"><div><span className="eyebrow">YOUR SAVED SELECTION</span><h3>{savedProducts.length} favourites · {money(savedProducts.reduce((total, p) => total + p.sell_price, 0))}</h3><p>Product prices only. Chat with us to confirm stock and delivery.</p></div><div className="plan-actions"><button className="primary-button" onClick={copyPlan}>Copy my list <Icon name="arrow" size={18}/></button><a className="secondary-button" href={FACEBOOK} target="_blank" rel="noreferrer">Chat on Facebook ↗</a></div></div>}
         </section>
         <section className="social-banner"><div className="social-decoration" aria-hidden="true">✧</div><div><span className="eyebrow">LET’S KEEP IN TOUCH</span><h2>Found your kind of lovely?</h2><p>Save your favourites and say hello. We’re just a message away.</p></div><div className="social-cta"><a href={FACEBOOK} target="_blank" rel="noreferrer">Find us on Facebook <Icon name="arrow" size={18}/></a><a href={INSTAGRAM} target="_blank" rel="noreferrer">@lunara_bd on Instagram ↗</a></div></section>
       </div>
     </main>
     <footer><div><button className="wordmark" onClick={() => navigate('feed')}>lunara<span>✧</span></button><p>A little lovely, every day.</p></div><span>Curated with love in Bangladesh</span><span>© {new Date().getFullYear()} Lunara</span></footer>
-    <nav className="mobile-nav" aria-label="Mobile navigation"><button className={view === 'feed' ? 'active' : ''} onClick={() => navigate('feed')}><Icon name="sun" size={20}/>Daily edit</button><button className={view === 'catalog' ? 'active' : ''} onClick={() => navigate('catalog')}><Icon name="grid" size={20}/>Explore</button><button className={view === 'plan' ? 'active' : ''} onClick={() => navigate('plan')}><Icon name="heart" size={20}/>My plan {savedIds.length ? `(${savedIds.length})` : ''}</button></nav>
+    <nav className="mobile-nav" aria-label="Mobile navigation"><button className={view === 'feed' ? 'active' : ''} onClick={() => navigate('feed')}><Icon name="sun" size={20}/>Discover</button><button className={view === 'catalog' ? 'active' : ''} onClick={() => navigate('catalog')}><Icon name="grid" size={20}/>Explore</button><button className={view === 'plan' ? 'active' : ''} onClick={() => navigate('plan')}><Icon name="heart" size={20}/>My plan {savedIds.length ? `(${savedIds.length})` : ''}</button></nav>
     {selected && <ProductDetail key={selected.id} product={selected} saved={savedIds.includes(selected.id)} onSave={() => toggleSave(selected.id)} onClose={closeProduct}/>}
     {notice && <div className="toast" role="status">{notice}</div>}
   </>

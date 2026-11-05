@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), VitePWA({
       registerType: 'autoUpdate', manifest: false,
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'], navigateFallback: '/index.html',
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,webmanifest}'], navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [{
           urlPattern: photoPattern,

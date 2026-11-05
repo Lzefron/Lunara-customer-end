@@ -71,9 +71,7 @@ preview while free business hosting is connected.
 - Edit a product, choose its category/subcategory, write its customer-facing
   description, and enable **Show in customer catalog**. Existing products are
   private until you explicitly enable this.
-- **Feature in the daily feed** prioritizes a product. Featured and regular
-  products each rotate at midnight in Asia/Dhaka; the feed uses existing catalog
-  content, so one item cannot produce new content by itself.
+- **Feature in the daily feed** prioritizes a product. Home shows New arrivals, department collections, and a mixed collection directly, without opening a category. Items rotate between visits and with Shuffle collection; only published inventory is shown.
 - Manager syncs after edits, every 30 seconds while visible, and on reconnect.
   Customers refresh within one minute, or immediately on returning to the page.
 - Trash/unpublish in Manager to remove a product from the storefront after sync.
@@ -106,3 +104,11 @@ Lunara. A first visit still needs an internet connection. The saved plan lives o
 the customer's browser and is not an order.
 
 See [the API contract](docs/catalog-api.md) for the public-data boundary.
+
+## November catalog update
+
+Existing product cards now offer Publish to customer catalog / Edit customer listing. Review details and photos, then Save & publish; the existing product ID is retained. Photo color, size and design travel in the existing photos JSON and need no database migration. Custom sections are preserved alongside 10 default departments; legacy Tote bags assignments appear under Bags. Home uses published products, with 24-item batches in the mixed collection.
+
+Research references: [Daraz categories](https://pages.daraz.com.bd/wow/i/bd/landingpage/category?hybrid=1&wh_weex=true), [H&M bags](https://www2.hm.com/content/hmonline/en_gb/ladies/accessories/bags.html), [Charles & Keith bags](https://www.charleskeith.com/us/bags).
+
+Decorative empty-catalog image: `public/images/lunara-editorial.jpg`, generated with the built-in image tool. Prompt: photorealistic editorial still life of a tan shoulder bag, cream canvas tote, pearl earrings, rose scarf, nude flats and unbranded cosmetics on ivory stone plinths; warm daylight, no text or logos. It is decorative inspiration, never a sale listing.

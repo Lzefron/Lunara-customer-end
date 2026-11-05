@@ -1,4 +1,4 @@
-export interface Photo { id: string; webp_path: string; thumb_path: string; kind?: 'catalog' | 'variant' | 'real'; label?: string }
+export interface Photo { id: string; webp_path: string; thumb_path: string; kind?: 'catalog' | 'variant' | 'real'; label?: string; color?: string; size?: string; design?: string }
 export interface Product {
   id: string; name: string; sell_price: number; colors: string[]; available: boolean;
   photos: Photo[]; category: string; subcategory: string; description: string;
