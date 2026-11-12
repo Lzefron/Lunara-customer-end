@@ -71,7 +71,7 @@ preview while free business hosting is connected.
 - Edit a product, choose its category/subcategory, write its customer-facing
   description, and enable **Show in customer catalog**. Existing products are
   private until you explicitly enable this.
-- **Feature in the daily feed** prioritizes a product. Home shows New arrivals, department collections, and a mixed collection directly, without opening a category. Items rotate between visits and with Shuffle collection; only published inventory is shown.
+- **Feature in the daily feed** marks a product as a Lunara pick. Home shows New arrivals, department collections, and a mixed collection directly, without opening a category. Items rotate between visits and with Shuffle collection; only published inventory is shown.
 - Manager syncs after edits, every 30 seconds while visible, and on reconnect.
   Customers refresh within one minute, or immediately on returning to the page.
 - Trash/unpublish in Manager to remove a product from the storefront after sync.
@@ -112,3 +112,9 @@ Existing product cards now offer Publish to customer catalog / Edit customer lis
 Research references: [Daraz categories](https://pages.daraz.com.bd/wow/i/bd/landingpage/category?hybrid=1&wh_weex=true), [H&M bags](https://www2.hm.com/content/hmonline/en_gb/ladies/accessories/bags.html), [Charles & Keith bags](https://www.charleskeith.com/us/bags).
 
 Decorative empty-catalog image: `public/images/lunara-editorial.jpg`, generated with the built-in image tool. Prompt: photorealistic editorial still life of a tan shoulder bag, cream canvas tote, pearl earrings, rose scarf, nude flats and unbranded cosmetics on ivory stone plinths; warm daylight, no text or logos. It is decorative inspiration, never a sale listing.
+
+## Fresh product ordering
+
+Discovery rows and Recommended category results shuffle on each page load, on return from the background (including an installed PWA or browser history restore), and at the next visible check after Bangladesh midnight. The previous first item in each viewed collection is remembered locally so a collection with at least two products starts differently next visit. Featured badges do not pin products to the front.
+
+The order stays stable during ordinary browsing and catalog polling. Price/Newest sorting and saved plans keep their ordering. If a product gallery is open when a new visit is detected, the shuffle waits until it closes. Shuffle collection also works inside categories and switches back to Recommended ordering. If browser storage is blocked, shuffling still works but cross-reload repeat prevention is best effort. No backend or product data changes are required.

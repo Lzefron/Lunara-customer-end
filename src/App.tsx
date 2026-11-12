@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { configured, getCatalog } from './api'
+import { useDiscovery } from './useDiscovery'
 import { categoryIcon, Icon, money, ProductCard, ProductImage } from './components'
 import { visitFeed, dhakaDay, filterProducts, planText, productColors, productSizes } from './catalogLogic.mjs'
 import defaults from './catalogCategories.json'
@@ -70,7 +71,8 @@ export default function App() {
   const [budget, setBudget] = useState('')
   const [savedIds, setSavedIds] = useState<string[]>(readSaved)
   const [selectedId, setSelectedId] = useState(new URLSearchParams(location.search).get('product'))
-  const [visitSeed, setVisitSeed] = useState(() => `${Date.now()}-${Math.random()}`)
+  const { visit, newVisit, remember } = useDiscovery(Boolean(selectedId))
+  const visitSeed = visit.seed
   const [size, setSize] = useState('')
   const [visibleCount, setVisibleCount] = useState(24)
   const [day, setDay] = useState(dhakaDay())
@@ -119,24 +121,33 @@ export default function App() {
   }, [catalog])
   const savedProducts = catalog.products.filter(p => savedIds.includes(p.id))
   const homeCollections = useMemo(() => {
-    const shuffled = visitFeed(catalog.products, visitSeed + day) as Product[]
     const latest = [...catalog.products].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).slice(0, 12)
     const groups = [
-      { title: 'New arrivals', description: 'Recently added to Lunara', category: '', items: visitFeed(latest, visitSeed) as Product[] },
-      ...categories.map(c => ({ title: c.name === 'Bags' ? 'Bags to love' : c.name === 'Shoes' ? 'Shoes for every day' : c.name, description: 'A few favourites to explore', category: c.name, items: shuffled.filter(p => p.category === c.name) })),
+      { title: 'New arrivals', description: 'Recently added to Lunara', category: '', items: visitFeed(latest, visitSeed + ':new', visit.previous['home:new']) as Product[], key: 'home:new' },
+      ...categories.map(c => ({ title: c.name === 'Bags' ? 'Bags to love' : c.name === 'Shoes' ? 'Shoes for every day' : c.name, description: 'A few favourites to explore', category: c.name, key: `home:${c.name}`, items: visitFeed(catalog.products.filter(p => p.category === c.name), visitSeed + c.name, visit.previous[`home:${c.name}`]) as Product[] })),
     ]
     return groups.filter(g => g.items.length).slice(0, 5)
-  }, [catalog.products, categories, visitSeed, day])
+  }, [catalog.products, categories, visit])
   const unavailableCount = savedIds.filter(id => !catalog.products.some(p => p.id === id)).length
   const selected = catalog.products.find(p => p.id === selectedId)
+  const browseKey = JSON.stringify(['browse', category, subcategory, query, available, color, budget, size])
   const products = useMemo(() => {
-    const source = view === 'plan' ? savedProducts : view === 'feed' ? visitFeed(catalog.products, visitSeed + day) : catalog.products
-    const result = filterProducts(source, { category: view === 'plan' ? '' : category, subcategory: view === 'plan' ? '' : subcategory, query, available, color, budget, size }) as Product[]
+    const source = view === 'plan' ? savedProducts : catalog.products
+    let result = filterProducts(source, { category: view === 'plan' ? '' : category, subcategory: view === 'plan' ? '' : subcategory, query, available, color, budget, size }) as Product[]
+    if (view !== 'plan' && sort === 'recommended') result = visitFeed(result, visitSeed + browseKey, visit.previous[browseKey])
     if (sort === 'low') result.sort((a, b) => a.sell_price - b.sell_price)
     if (sort === 'high') result.sort((a, b) => b.sell_price - a.sell_price)
     if (sort === 'new') result.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     return result
-  }, [view, savedProducts, catalog.products, day, category, subcategory, query, available, sort, color, budget, size, visitSeed])
+  }, [view, savedProducts, catalog.products, day, category, subcategory, query, available, sort, color, budget, size, visit, browseKey])
+  useEffect(() => {
+    const entries: Record<string, string> = {}
+    if (view === 'feed' && !query && !category && !color && !size && !budget && !available) {
+      for (const group of homeCollections) if (group.items[0]) entries[group.key] = group.items[0].id
+    }
+    if (view !== 'plan' && sort === 'recommended' && products[0]) entries[browseKey] = products[0].id
+    if (Object.keys(entries).length) remember(entries)
+  }, [homeCollections, products, view, query, category, color, size, budget, available, sort, browseKey, remember])
   useEffect(() => { setVisibleCount(24) }, [view, category, subcategory, query, available, sort, color, budget, size, visitSeed])
   function navigate(next: typeof view, cat = '') {
     setView(next); setCategory(cat); setSubcategory(''); setQuery(''); setSort('recommended'); setAvailable(false); setColor(''); setBudget(''); setSize('')
@@ -166,7 +177,7 @@ export default function App() {
         {view !== 'plan' && <div className="discovery-top"><div><span className="eyebrow">LUNARA · JUST FOR YOU</span><h1>{view === 'feed' ? 'Find your next favourite.' : 'Explore the collection.'}</h1></div><label className="search"><Icon name="search" size={19}/><input type="search" aria-label="Search all products" placeholder="Search bags, shoes, colors, sizes…" value={query} onChange={e => setQuery(e.target.value)}/></label></div>}
         {view !== 'plan' && <section className="category-section" aria-label="Browse categories"><div className="section-kicker">SHOP BY DEPARTMENT</div><div className="category-row"><button className={!category ? 'category active' : 'category'} onClick={() => { setCategory(''); setSubcategory('') }}><span className="category-icon"><Icon name="grid" size={27}/></span><span>Everything</span></button>{categories.map(c => <button key={c.name} className={category === c.name ? 'category active' : 'category'} onClick={() => { setCategory(c.name); setSubcategory(''); setView('catalog') }}><span className="category-icon"><Icon name={categoryIcon(c.name)} size={29}/></span><span>{c.name}</span></button>)}</div></section>}
         {view === 'feed' && !query && !category && !color && !size && !budget && !available && homeCollections.map(group => <section className="home-collection" key={group.title} aria-label={group.title}><div className="collection-heading"><div><span className="eyebrow">{group.description}</span><h2>{group.title}</h2></div><button className="secondary-button" onClick={() => { navigate('catalog', group.category); if (!group.category) setSort('new') }}>View all ↗</button></div><div className="collection-rail">{group.items.slice(0, 6).map(p => <ProductCard key={p.id} product={p} saved={savedIds.includes(p.id)} onSave={() => toggleSave(p.id)} onOpen={() => openProduct(p.id)}/>)}</div></section>)}
-        <section className="collection-section" id="collection"><div className="collection-heading"><div><span className="eyebrow">{view === 'plan' ? 'YOUR LITTLE WISH LIST' : view === 'feed' ? `FRESH PERSPECTIVE · ${new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', timeZone: 'Asia/Dhaka' }).format(new Date())}` : 'FIND SOMETHING YOU LOVE'}</span><h2>{view === 'plan' ? 'Your plan to order' : category || (view === 'feed' ? 'More to fall in love with' : 'Explore the collection')}<span className="heading-sparkle">✧</span></h2><p>{view === 'plan' ? 'Keep your favourites together. Send us your list whenever you’re ready.' : view === 'feed' ? 'A fresh mix each visit. Keep scrolling to find your favourites.' : 'Thoughtfully picked pieces for every kind of day.'}</p></div>{view === 'feed' && <button className="secondary-button" onClick={() => setVisitSeed(`${Date.now()}-${Math.random()}`)}>Shuffle collection ↻</button>}</div>
+        <section className="collection-section" id="collection"><div className="collection-heading"><div><span className="eyebrow">{view === 'plan' ? 'YOUR LITTLE WISH LIST' : view === 'feed' ? `FRESH PERSPECTIVE · ${new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', timeZone: 'Asia/Dhaka' }).format(new Date())}` : 'FIND SOMETHING YOU LOVE'}</span><h2>{view === 'plan' ? 'Your plan to order' : category || (view === 'feed' ? 'More to fall in love with' : 'Explore the collection')}<span className="heading-sparkle">✧</span></h2><p>{view === 'plan' ? 'Keep your favourites together. Send us your list whenever you’re ready.' : view === 'feed' ? 'A fresh mix each visit. Keep scrolling to find your favourites.' : 'Thoughtfully picked pieces for every kind of day.'}</p></div>{view !== 'plan' && <button className="secondary-button" onClick={() => { setSort('recommended'); newVisit(); setNotice('A fresh mix, just for you.') }}>Shuffle collection ↻</button>}</div>
           {category && view !== 'plan' && <div className="subcategories" aria-label="Subcategories"><button className={!subcategory ? 'active' : ''} onClick={() => setSubcategory('')}>All {category.toLowerCase()}</button>{categories.find(c => c.name === category)?.subcategories.map(s => <button key={s} className={subcategory === s ? 'active' : ''} onClick={() => setSubcategory(s)}>{s}</button>)}</div>}
           <div className="toolbar"><label className="search"><Icon name="search" size={19}/><input type="search" placeholder="Search for something lovely…" aria-label="Search products" value={query} onChange={e => setQuery(e.target.value)}/></label><div className="filters"><label className="available-filter"><input type="checkbox" checked={available} onChange={e => setAvailable(e.target.checked)}/> Available only</label><label className="sort"><span>Sort:</span><select aria-label="Sort products" value={sort} onChange={e => setSort(e.target.value)}><option value="recommended">{view === 'feed' ? 'For this visit' : 'Recommended'}</option><option value="new">Newest first</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option></select></label></div></div>
           <div className="extra-filters"><label>Department<select aria-label="Filter by department" value={category} onChange={e => { setCategory(e.target.value); setSubcategory(''); setView('catalog') }}><option value="">All departments</option>{categories.map(c => <option key={c.name}>{c.name}</option>)}</select></label><label>Color<select aria-label="Filter by color" value={color} onChange={e => setColor(e.target.value)}><option value="">Every color</option>{([...new Set(catalog.products.flatMap(productColors))] as string[]).sort().map(c => <option key={c} value={c}>{c}</option>)}</select></label><label>Size<select aria-label="Filter by size" value={size} onChange={e => setSize(e.target.value)}><option value="">Every size</option>{(Array.from(new Set(catalog.products.flatMap(productSizes))) as string[]).sort().map(s => <option key={s} value={s}>{s}</option>)}</select></label><label>Budget<select aria-label="Filter by budget" value={budget} onChange={e => setBudget(e.target.value)}><option value="">Any price</option><option value="500">Up to ৳500</option><option value="1000">Up to ৳1,000</option><option value="2000">Up to ৳2,000</option><option value="5000">Up to ৳5,000</option></select></label>{(color || budget || query || available || size) && <button onClick={() => { setColor(''); setBudget(''); setSize(''); setQuery(''); setAvailable(false); setSize('') }}>Clear filters</button>}</div>

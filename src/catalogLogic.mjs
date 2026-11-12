@@ -25,12 +25,25 @@ export function planText(products, origin) {
 
 export function productColors(p) { return [...new Set([...(p.colors ?? []), ...(p.photos ?? []).map(photo => photo.color).filter(Boolean)])] }
 export function productSizes(p) { return [...new Set((p.photos ?? []).map(photo => photo.size).filter(Boolean))] }
-// Stable throughout browsing; a new visit changes the seed, never duplicates items.
-export function visitFeed(products, seed) {
-  const score = id => {
-    let h = 2166136261
-    for (const c of `${seed}:${id}`) h = Math.imul(h ^ c.charCodeAt(0), 16777619)
-    return h >>> 0
+// Seeded Fisher–Yates: stable during a visit and independent of API row order.
+// Featured badges stay visible, but no item is permanently pinned to the front.
+export function visitFeed(products, seed, previousFirst = '') {
+  let state = 2166136261
+  for (const c of String(seed)) state = Math.imul(state ^ c.charCodeAt(0), 16777619)
+  const random = () => {
+    state = (state + 0x6D2B79F5) | 0
+    let t = Math.imul(state ^ (state >>> 15), 1 | state)
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
-  return [...products].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)) || score(a.id) - score(b.id) || a.id.localeCompare(b.id))
+  const rows = [...products].sort((a, b) => a.id.localeCompare(b.id))
+  for (let i = rows.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1))
+    ;[rows[i], rows[j]] = [rows[j], rows[i]]
+  }
+  if (rows.length > 1 && rows[0].id === previousFirst) {
+    const j = 1 + Math.floor(random() * (rows.length - 1))
+    ;[rows[0], rows[j]] = [rows[j], rows[0]]
+  }
+  return rows
 }

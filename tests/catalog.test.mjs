@@ -41,6 +41,31 @@ test('visit feed is stable within a visit, changes between visits and retains ev
   assert.notDeepEqual(visitFeed(rows, 'visit-1'), visitFeed(rows, 'visit-2'))
   assert.equal(new Set(visitFeed(rows, 'visit-2').map(p => p.id)).size, 60)
 })
+
+test('a new visit cannot repeat the first product when alternatives exist', () => {
+  let previousFirst = ''
+  const originalIds = products.map(p => p.id)
+  for (let i = 0; i < 100; i++) {
+    const rows = visitFeed(products, `visit-${i}`, previousFirst)
+    assert.notEqual(rows[0].id, previousFirst)
+    assert.deepEqual(new Set(rows.map(p => p.id)), new Set(originalIds))
+    previousFirst = rows[0].id
+  }
+  assert.deepEqual(products.map(p => p.id), originalIds)
+})
+
+test('featured items do not permanently pin the front and a two-item collection always changes', () => {
+  const pair = [{ ...products[0], featured: true }, { ...products[1], featured: false }]
+  let previousFirst = 'a'
+  for (let i = 0; i < 20; i++) {
+    const rows = visitFeed(pair, 'even-the-same-seed', previousFirst)
+    assert.notEqual(rows[0].id, previousFirst)
+    previousFirst = rows[0].id
+  }
+  assert.deepEqual(visitFeed([], 'visit'), [])
+  assert.deepEqual(visitFeed([products[0]], 'visit', 'a'), [products[0]])
+  assert.equal(visitFeed(pair, 'visit', 'removed-id').length, 2)
+})
 test('photo sizes, colors and designs are searchable and filterable together', () => {
   const row = { ...products[0], photos: [{ color: 'Rose', size: 'M', design: 'Pearl strap' }] }
   assert.deepEqual(filterProducts([row], { query: 'pearl', color: 'Rose', size: 'M', budget: '700' }), [row])
