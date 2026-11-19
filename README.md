@@ -115,6 +115,8 @@ Decorative empty-catalog image: `public/images/lunara-editorial.jpg`, generated 
 
 ## Fresh product ordering
 
+Product grids reveal the next 24 items automatically when customers scroll near the bottom. Browsing keeps the current order, filters and scroll position, and stops loading once all matching products are visible.
+
 Discovery rows and Recommended category results shuffle on each page load, on return from the background (including an installed PWA or browser history restore), and at the next visible check after Bangladesh midnight. The previous first item in each viewed collection is remembered locally so a collection with at least two products starts differently next visit. Featured badges do not pin products to the front.
 
 The order stays stable during ordinary browsing and catalog polling. Price/Newest sorting and saved plans keep their ordering. If a product gallery is open when a new visit is detected, the shuffle waits until it closes. Shuffle collection also works inside categories and switches back to Recommended ordering. If browser storage is blocked, shuffling still works but cross-reload repeat prevention is best effort. No backend or product data changes are required.

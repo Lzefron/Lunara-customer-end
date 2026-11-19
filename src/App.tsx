@@ -75,6 +75,7 @@ export default function App() {
   const visitSeed = visit.seed
   const [size, setSize] = useState('')
   const [visibleCount, setVisibleCount] = useState(24)
+  const moreProducts = useRef<HTMLDivElement>(null)
   const [day, setDay] = useState(dhakaDay())
   const [notice, setNotice] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
@@ -149,6 +150,21 @@ export default function App() {
     if (Object.keys(entries).length) remember(entries)
   }, [homeCollections, products, view, query, category, color, size, budget, available, sort, browseKey, remember])
   useEffect(() => { setVisibleCount(24) }, [view, category, subcategory, query, available, sort, color, budget, size, visitSeed])
+  useEffect(() => {
+    const target = moreProducts.current
+    if (!target || loading || selectedId || visibleCount >= products.length) return
+    // Older browsers can show the whole list; product photos still load lazily.
+    if (!('IntersectionObserver' in window)) { setVisibleCount(products.length); return }
+    let active = true
+    const observer = new IntersectionObserver(entries => {
+      if (!active || !entries.some(entry => entry.isIntersecting)) return
+      active = false
+      observer.disconnect()
+      setVisibleCount(count => Math.min(count + 24, products.length))
+    }, { rootMargin: '400px 0px' })
+    observer.observe(target)
+    return () => { active = false; observer.disconnect() }
+  }, [visibleCount, products.length, loading, selectedId])
   function navigate(next: typeof view, cat = '') {
     setView(next); setCategory(cat); setSubcategory(''); setQuery(''); setSort('recommended'); setAvailable(false); setColor(''); setBudget(''); setSize('')
     window.scrollTo({ top: 0, behavior: 'auto' })
@@ -184,7 +200,7 @@ export default function App() {
           {error && <div className="connection-notice" role="status"><span>{error}{loaded ? ' Showing the last loaded collection; prices and availability may have changed.' : ''}</span><button onClick={refresh}>Try again</button></div>}
           {selectedId && loaded && !selected && <div className="connection-notice" role="status">This product is no longer in the catalog.<button onClick={closeProduct}>Dismiss</button></div>}
           {view === 'plan' && unavailableCount > 0 && loaded && <div className="connection-notice">{unavailableCount} saved {unavailableCount === 1 ? 'item is' : 'items are'} no longer published.<button onClick={() => setSavedIds(savedProducts.map(p => p.id))}>Clear unavailable items</button></div>}
-          {loading ? <div className="product-grid" aria-label="Loading products" aria-busy="true">{[1,2,3,4].map(i => <div className="skeleton" key={i}/>)}</div> : products.length ? <><div className="result-count">{products.length} {products.length === 1 ? 'little favourite' : 'little favourites'}</div><div className="product-grid">{products.slice(0, visibleCount).map(p => <ProductCard key={p.id} product={p} saved={savedIds.includes(p.id)} onSave={() => toggleSave(p.id)} onOpen={() => openProduct(p.id)}/>)}</div>{visibleCount < products.length && <button className="primary-button load-more" onClick={() => setVisibleCount(n => n + 24)}>Discover more · {products.length - visibleCount} remaining</button>}</> : <div className="empty-state"><span className="empty-icon"><Icon name={view === 'plan' ? 'heart' : 'bag'} size={36}/></span><h3>{view === 'plan' ? 'A little room for your favourites' : query || category || available ? 'Still looking for your lovely?' : 'Something lovely is on its way'}</h3><p>{view === 'plan' ? 'Tap the heart on any product to keep it here.' : query || category || available ? 'Try another search or explore the whole collection.' : 'We’re preparing our collection. Follow Lunara for the latest finds.'}</p><button className="secondary-button" onClick={() => navigate('catalog')}>{view === 'plan' ? 'Explore the collection' : 'Show all products'}<Icon name="arrow" size={18}/></button></div>}
+          {loading ? <div className="product-grid" aria-label="Loading products" aria-busy="true">{[1,2,3,4].map(i => <div className="skeleton" key={i}/>)}</div> : products.length ? <><div className="result-count">{products.length} {products.length === 1 ? 'little favourite' : 'little favourites'}</div><div className="product-grid">{products.slice(0, visibleCount).map(p => <ProductCard key={p.id} product={p} saved={savedIds.includes(p.id)} onSave={() => toggleSave(p.id)} onOpen={() => openProduct(p.id)}/>)}</div>{visibleCount < products.length && <div ref={moreProducts} style={{ height: 1 }} aria-hidden="true"/>}</> : <div className="empty-state"><span className="empty-icon"><Icon name={view === 'plan' ? 'heart' : 'bag'} size={36}/></span><h3>{view === 'plan' ? 'A little room for your favourites' : query || category || available ? 'Still looking for your lovely?' : 'Something lovely is on its way'}</h3><p>{view === 'plan' ? 'Tap the heart on any product to keep it here.' : query || category || available ? 'Try another search or explore the whole collection.' : 'We’re preparing our collection. Follow Lunara for the latest finds.'}</p><button className="secondary-button" onClick={() => navigate('catalog')}>{view === 'plan' ? 'Explore the collection' : 'Show all products'}<Icon name="arrow" size={18}/></button></div>}
           {view === 'plan' && savedProducts.length > 0 && <div className="plan-summary"><div><span className="eyebrow">YOUR SAVED SELECTION</span><h3>{savedProducts.length} favourites · {money(savedProducts.reduce((total, p) => total + p.sell_price, 0))}</h3><p>Product prices only. Chat with us to confirm stock and delivery.</p></div><div className="plan-actions"><button className="primary-button" onClick={copyPlan}>Copy my list <Icon name="arrow" size={18}/></button><a className="secondary-button" href={FACEBOOK} target="_blank" rel="noreferrer">Chat on Facebook ↗</a></div></div>}
         </section>
         <section className="social-banner"><div className="social-decoration" aria-hidden="true">✧</div><div><span className="eyebrow">LET’S KEEP IN TOUCH</span><h2>Found your kind of lovely?</h2><p>Save your favourites and say hello. We’re just a message away.</p></div><div className="social-cta"><a href={FACEBOOK} target="_blank" rel="noreferrer">Find us on Facebook <Icon name="arrow" size={18}/></a><a href={INSTAGRAM} target="_blank" rel="noreferrer">@lunara_bd on Instagram ↗</a></div></section>
